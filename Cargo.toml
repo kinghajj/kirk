@@ -11,3 +11,6 @@ num_cpus = "~0.2.10"
 
 [dev-dependencies]
 env_logger = "~0.3.2"
+
+[features]
+nightly = []

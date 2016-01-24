@@ -29,6 +29,7 @@ fn it_works() {
 }
 
 #[test]
+#[cfg(feature = "nightly")]
 fn it_doesnt_bail() {
     let options = Options::default();
     crossbeam::scope(|scope| {

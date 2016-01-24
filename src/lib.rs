@@ -13,11 +13,8 @@
 //! to use conditional compilation to let the crate compile in stable Rust, just
 //! without the ability to recover from panics.
 
-// Not working... why?
-// #![cfg_attr(feature = "nightly",
-//             feature(recover))]
-
-#![feature(recover, stmt_expr_attributes)]
+#![cfg_attr(feature = "nightly",
+            feature(recover))]
 
 extern crate crossbeam;
 #[macro_use]
@@ -25,12 +22,12 @@ extern crate log;
 extern crate num_cpus;
 
 use std::default::Default;
-#[cfg(tracing)]
-use std::mem;
 use std::ops::Drop;
-use std::panic::{recover, RecoverSafe};
 use std::thread::{sleep, yield_now};
 use std::time::Duration;
+
+#[cfg(feature = "nightly")]
+use std::panic::{recover, RecoverSafe};
 
 use crossbeam::Scope;
 use crossbeam::sync::chase_lev;
@@ -61,6 +58,7 @@ impl<'a> Task<'a> {
     }
 }
 
+#[cfg(feature = "nightly")]
 impl<'a> RecoverSafe for Task<'a> {}
 
 enum Message<'a> {
@@ -89,6 +87,7 @@ enum Load {
 }
 
 struct Worker {
+    #[cfg_attr(not(feature = "nightly"), allow(dead_code))]
     id: usize,
     load: Load,
     retries: u32,
@@ -106,12 +105,10 @@ impl Worker {
     }
 
     // the worker just successfully acquired an item
+    // this version uses `recover` to handle panics from tasks
+    #[cfg(feature = "nightly")]
     fn does<'scope>(&mut self, task: Task<'scope>) {
         recover(|| {
-            #[cfg(tracing)]
-            trace!("worker #{}: calling task: {:x}",
-                   self.id,
-                   unsafe { mem::transmute_copy::<Task<'scope>, usize>(&task) });
             task.call();
         })
             .map_err(|e| error!("worker #{}: task panicked: {:?}", self.id, e))
@@ -119,11 +116,17 @@ impl Worker {
         self.load = Load::Hot;
     }
 
+    #[cfg(not(feature = "nightly"))]
+    // the worker just successfully acquired an item
+    // this version propogates panics from tasks
+    fn does<'scope>(&mut self, task: Task<'scope>) {
+        task.call();
+        self.load = Load::Hot;
+    }
+
     // the worker just lost a race to acquire an item
     fn missed(&mut self) {
-        trace!("worker #{}: lost race", self.id);
         if self.options.retry_threshold == 0 {
-            trace!("worker #{}: become cold", self.id);
             self.load = Load::Cold;
             return;
         }
@@ -136,11 +139,7 @@ impl Worker {
 
     // the worker just found an empty work queue
     fn nothing(&mut self) {
-        #[cfg(tracing)]
-        trace!("worker #{}: empty queue", self.id);
         if self.options.retry_threshold == 0 {
-            #[cfg(tracing)]
-            trace!("worker #{}: become cold", self.id);
             self.load = Load::Cold;
             return;
         }
@@ -162,8 +161,6 @@ impl Worker {
 
     #[inline]
     fn become_warm(&mut self) {
-        #[cfg(tracing)]
-        trace!("worker #{}: become warm", self.id);
         self.load = Load::Warm;
         self.retries = 0;
     }
@@ -171,19 +168,8 @@ impl Worker {
     #[inline]
     fn become_cooler(&mut self) {
         self.retries += 1;
-        #[cfg(tracing)]
-        trace!("worker #{}: {} {}",
-               self.id,
-               self.retries,
-               if self.retries == 1 {
-                   "retry"
-               } else {
-                   "retries "
-               });
         // exceeded threshold, become cold
         if self.retries >= self.options.retry_threshold {
-            #[cfg(tracing)]
-            trace!("worker #{}: become cold", self.id);
             self.load = Load::Cold;
         }
     }
@@ -238,24 +224,11 @@ pub struct Pool<'scope> {
 impl<'scope> Pool<'scope> {
     /// Create a new task pool.
     pub fn new(scope: &Scope<'scope>, options: Options) -> Pool<'scope> {
-        #[cfg(tracing)]
-        trace!("creating pool with {} {}",
-               options.num_workers,
-               if options.num_workers == 1 {
-                   "worker"
-               } else {
-                   "workers"
-               });
-
         let (sender, stealer) = chase_lev::deque();
         for id in 0..options.num_workers {
             let stealer = stealer.clone();
             let mut worker = Worker::new(id, options);
-            #[cfg(tracing)]
-            trace!("spawning worker #{}", worker.id);
             scope.spawn(move || {
-                #[cfg(tracing)]
-                trace!("worker #{} running", worker.id);
                 loop {
                     match stealer.steal() {
                         Data(Message::Work(task)) => worker.does(task),
@@ -265,8 +238,6 @@ impl<'scope> Pool<'scope> {
                     }
                     worker.wait();
                 }
-                #[cfg(tracing)]
-                trace!("worker #{} stopping", worker.id);
             });
         }
         Pool {
@@ -280,9 +251,6 @@ impl<'scope> Pool<'scope> {
         where F: FnOnce() + Send + Sync + 'scope
     {
         let task = Task(Box::new(f));
-        #[cfg(tracing)]
-        trace!("adding task: {:x}",
-               unsafe { mem::transmute_copy::<Task<'scope>, usize>(&task) });
         self.sender.push(Message::Work(task));
     }
 }
@@ -290,8 +258,6 @@ impl<'scope> Pool<'scope> {
 // When a pool is dropped, tell each worker to stop.
 impl<'scope> Drop for Pool<'scope> {
     fn drop(&mut self) {
-        #[cfg(tracing)]
-        trace!("pool dropped, telling workers to stop");
         for _ in 0..self.options.num_workers {
             self.sender.push(Message::Stop);
         }
