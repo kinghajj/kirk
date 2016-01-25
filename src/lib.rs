@@ -1,17 +1,4 @@
-//! A scoped task pool using `crossbeam`.
-//!
-//! This is similar to `scoped_threadpool`, except that it uses the lock-free
-//! deque from `crossbeam`. Adding tasks is cheap:  on my MacBook, the benchmark
-//! `enqueue_nop_task` takes 75 ns/iter. The intended use case is when finding
-//! tasks is I/O-bound, while the tasks are CPU-bound. Because the deque is
-//! work-stealing, threads always stay busy as long as there are outstanding
-//! tasks. However, to avoid excessive CPU usage when there are no tasks, the
-//! threads will "cool down" and sleep between checking the deque.
-//!
-//! Currently, this makes use of the unstable "recover" feature to prevent
-//! panics in tasks causing the entire pool to come down. It should be possible
-//! to use conditional compilation to let the crate compile in stable Rust, just
-//! without the ability to recover from panics.
+//! Pools of workers that perform generic jobs, statically or dynamically.
 
 #![cfg_attr(feature = "nightly",
             feature(recover))]
@@ -33,53 +20,32 @@ use crossbeam::Scope;
 use crossbeam::sync::chase_lev;
 use crossbeam::sync::chase_lev::Steal::{Data, Abort, Empty};
 
-// From `scoped_threadpool` crate
-
-trait FnBox {
-    fn call_box(self: Box<Self>);
-}
-
-impl<F: FnOnce()> FnBox for F {
-    fn call_box(self: Box<F>) {
-        (*self)()
-    }
-}
-
 // Not exactly sure why `Sync` is required, when `scoped_threadpool` did not.
 // I think it's due to a possibly-overzealous requirement in `crossbeam`.
 // An unfortunate side-effect of this is that channel senders cannot be moved
 // into a task.
-struct Task<'a>(Box<FnBox + Send + Sync + 'a>);
 
-impl<'a> Task<'a> {
-    fn call(self) {
-        let Task(task) = self;
-        task.call_box();
-    }
+/// The generic "job" that a pool's workers can perform.
+#[cfg(feature = "nightly")]
+pub trait Job: Send + Sync + RecoverSafe {
+    type Product;
+    #[inline]
+    fn perform(self) -> Self::Product;
 }
 
-#[cfg(feature = "nightly")]
-impl<'a> RecoverSafe for Task<'a> {}
+/// The generic "job" that a pool's workers can perform.
+#[cfg(not(feature = "nightly"))]
+pub trait Job: Send + Sync {
+    type Product;
+    #[inline]
+    fn perform(self) -> Self::Product;
+}
 
-enum Message<'a> {
-    Work(Task<'a>),
+enum Message<Job> {
+    Work(Job),
     Stop,
 }
 
-/// Each worker thread can be in one of three states--"hot," "warm," and
-/// "cold"--that indicate recent activity. A worker that has just successfully
-/// stolen a task is always hot. If one encounteres an empty queue or loses
-/// a race to steal, it becomes warm, with a retry count of zero; if it was
-/// already warm, the count is incremented. Eventually, the retry count may
-/// exceed the configured threshold, making the worker become cold. A cold
-/// worker may also become hot again if it loses a race to steal a task,
-/// since this strongly indicates that another task is ready for execution.
-///
-/// This determines whether a worker continues immediately, cooperatively yields
-/// to another thread, or sleeps before attempting to steal another task,
-/// respectfully. The goal is to allow workers to progress unhindered as long
-/// as there are tasks to execute, but reduce excessive CPU usage during periods
-/// where there are little to none.
 enum Load {
     Hot,
     Warm,
@@ -104,27 +70,43 @@ impl Worker {
         }
     }
 
+    #[inline]
+    fn run<J: Job>(&mut self, stealer: chase_lev::Stealer<Message<J>>) {
+        loop {
+            match stealer.steal() {
+                Data(Message::Work(job)) => self.does(job),
+                Data(Message::Stop) => break,
+                Abort => self.missed(),
+                Empty => self.nothing(),
+            }
+            self.wait();
+        }
+    }
+
     // the worker just successfully acquired an item
-    // this version uses `recover` to handle panics from tasks
+    // this version uses `recover` to handle panics from jobs
     #[cfg(feature = "nightly")]
-    fn does<'scope>(&mut self, task: Task<'scope>) {
+    #[inline]
+    fn does<J: Job>(&mut self, job: J) {
         recover(|| {
-            task.call();
+            job.perform();
         })
-            .map_err(|e| error!("worker #{}: task panicked: {:?}", self.id, e))
+            .map_err(|e| error!("worker #{}: job panicked: {:?}", self.id, e))
             .ok();
         self.load = Load::Hot;
     }
 
     #[cfg(not(feature = "nightly"))]
     // the worker just successfully acquired an item
-    // this version propogates panics from tasks
-    fn does<'scope>(&mut self, task: Task<'scope>) {
-        task.call();
+    // this version propogates panics from job
+    #[inline]
+    fn does<J: Job>(&mut self, job: J) {
+        job.perform();
         self.load = Load::Hot;
     }
 
     // the worker just lost a race to acquire an item
+    #[inline]
     fn missed(&mut self) {
         if self.options.retry_threshold == 0 {
             self.load = Load::Cold;
@@ -138,6 +120,7 @@ impl Worker {
     }
 
     // the worker just found an empty work queue
+    #[inline]
     fn nothing(&mut self) {
         if self.options.retry_threshold == 0 {
             self.load = Load::Cold;
@@ -151,6 +134,7 @@ impl Worker {
     }
 
     // continue, yield, or sleep based on the load
+    #[inline]
     fn wait(&self) {
         match self.load {
             Load::Hot => {}
@@ -176,9 +160,12 @@ impl Worker {
 }
 
 /// Parameters to adjust the size and behavior of a pool.
+///
+/// The current defaults for retry threshold and cold interval--32 and 1ms--were
+/// chosen arbitrarily. Experimentation may be prudent.
 #[derive(Copy, Clone)]
 pub struct Options {
-    /// How many times may a worker fail to acquire a task before it becomes
+    /// How many times may a worker fail to acquire a job before it becomes
     /// "cold" and sleeps for `cold_interval` between subsequent attempts.
     pub retry_threshold: u32,
     /// The minimum length of time a worker will sleep when it is cold.
@@ -189,8 +176,6 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Options {
-        // these values were not chosen for any particular reason;
-        // benchmarking different configurations would be prudent.
         Options {
             retry_threshold: 32,
             cold_interval: Duration::from_millis(1),
@@ -199,9 +184,11 @@ impl Default for Options {
     }
 }
 
-/// A pool of worker threads that execute jobs within a bounded scope.
+/// A scoped set of worker threads that perform jobs.
 ///
-/// Because of `crossbeam::scope`, tasks can safely access data on the stack of
+/// # Scoping
+///
+/// Because of `crossbeam::scope`, jobs can safely access data on the stack of
 /// the original caller, like so:
 ///
 /// ```
@@ -210,34 +197,51 @@ impl Default for Options {
 ///
 /// let mut items = [0usize; 8];
 /// crossbeam::scope(|scope| {
-///     let mut pool = kirk::Pool::new(&scope, kirk::Options::default());
+///     let mut pool = kirk::Pool::<kirk::Task>::new(&scope, kirk::Options::default());
 ///     for (i, e) in items.iter_mut().enumerate() {
-///         pool.execute(move || *e = i)
+///         pool.push(move || *e = i)
 ///     }
 /// });
 /// ```
-pub struct Pool<'scope> {
+///
+/// # Worker Details
+///
+/// Jobs are pushed to workers using the lock-free Chase-Lev deque implemented
+/// in `crossbeam`. Each worker runs this loop in a separate thread:
+///
+///   1. Try to steal a job
+///   2. If successful, perform it, and become "hot"
+///   3. If shutting down, break
+///   4. If lost a race or no jobs, "cool down"
+///   5. Possibly yield or sleep
+///
+/// When a hot worker "cools down," it becomes "warm", with a retry count of
+/// zero; an already-warm worker increases the retry count. Eventually, the
+/// retry threshold may be exceeded, and the worker becomes "cold".
+///
+/// The temperature determines the action at step five: a hot worker immediately
+/// continues the loop; a warm one cooperatively yields to another thread; and
+/// cold ones sleep. The goal is to allow workers to progress unhindered as long
+/// as there are jobs, but reduce excessive CPU usage during periods when there
+/// are little to none.
+///
+/// A cold worker may also become hot again if it loses a race to steal a job,
+/// since this strongly indicates that another job is ready, but remains cold
+/// as long as it finds the queue empty.
+pub struct Pool<J> {
     options: Options,
-    sender: chase_lev::Worker<Message<'scope>>,
+    sender: chase_lev::Worker<Message<J>>,
 }
 
-impl<'scope> Pool<'scope> {
-    /// Create a new task pool.
-    pub fn new(scope: &Scope<'scope>, options: Options) -> Pool<'scope> {
+impl<'scope, J: Job + 'scope> Pool<J> {
+    /// Create a new worker pool.
+    pub fn new(scope: &Scope<'scope>, options: Options) -> Pool<J> {
         let (sender, stealer) = chase_lev::deque();
         for id in 0..options.num_workers {
             let stealer = stealer.clone();
             let mut worker = Worker::new(id, options);
             scope.spawn(move || {
-                loop {
-                    match stealer.steal() {
-                        Data(Message::Work(task)) => worker.does(task),
-                        Data(Message::Stop) => break,
-                        Abort => worker.missed(),
-                        Empty => worker.nothing(),
-                    }
-                    worker.wait();
-                }
+                worker.run(stealer);
             });
         }
         Pool {
@@ -246,20 +250,61 @@ impl<'scope> Pool<'scope> {
         }
     }
 
-    /// Add a task to the pool.
-    pub fn execute<F>(&mut self, f: F)
-        where F: FnOnce() + Send + Sync + 'scope
+    /// Add a job to the pool.
+    pub fn push<F>(&mut self, f: F)
+        where J: From<F>
     {
-        let task = Task(Box::new(f));
-        self.sender.push(Message::Work(task));
+        self.sender.push(Message::Work(J::from(f)));
     }
 }
 
 // When a pool is dropped, tell each worker to stop.
-impl<'scope> Drop for Pool<'scope> {
+impl<J> Drop for Pool<J> {
     fn drop(&mut self) {
         for _ in 0..self.options.num_workers {
             self.sender.push(Message::Stop);
         }
+    }
+}
+
+// From `scoped_threadpool` crate
+
+trait FnBox {
+    #[inline]
+    fn call_box(self: Box<Self>);
+}
+
+impl<F: FnOnce()> FnBox for F {
+    #[inline]
+    fn call_box(self: Box<F>) {
+        (*self)()
+    }
+}
+
+/// A boxed closure that can be performed as a job.
+///
+/// This allows pools to execute any kind of job, but with the increased cost of
+/// dynamic invocation.
+pub struct Task<'a>(Box<FnBox + Send + Sync + 'a>);
+
+impl<'a> Job for Task<'a> {
+    type Product = ();
+
+    #[inline]
+    fn perform(self) {
+        let Task(task) = self;
+        task.call_box();
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a> RecoverSafe for Task<'a> {}
+
+// Allow closures to be converted to tasks automatically for convenience.
+impl<'a, F> From<F> for Task<'a> where F: FnOnce() + Send + Sync + 'a
+{
+    #[inline]
+    fn from(f: F) -> Task<'a> {
+        Task(Box::new(f))
     }
 }

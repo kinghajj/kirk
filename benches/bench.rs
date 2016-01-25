@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use test::{Bencher, black_box};
 
-use kirk::{Options, Pool};
+use kirk::{Options, Pool, Task};
 
 #[bench]
 fn startup_and_teardown(mut b: &mut Bencher) {
@@ -17,7 +17,7 @@ fn startup_and_teardown(mut b: &mut Bencher) {
     options.num_workers = 1;
     b.iter(|| {
         crossbeam::scope(|scope| {
-            let _ = Pool::new(&scope, options);
+            let _ = Pool::<Task>::new(&scope, options);
         });
     });
 }
@@ -27,9 +27,9 @@ fn enqueue_nop_task(b: &mut Bencher) {
     let mut options = Options::default();
     options.num_workers = 1;
     crossbeam::scope(|scope| {
-        let mut pool = Pool::new(&scope, options);
+        let mut pool = Pool::<Task>::new(&scope, options);
         b.iter(|| {
-            pool.execute(move || {
+            pool.push(move || {
                 black_box(0);
             });
         })
@@ -42,10 +42,10 @@ fn enqueue_atomic_task(b: &mut Bencher) {
     options.num_workers = 1;
     let counter = Arc::new(AtomicUsize::new(0));
     crossbeam::scope(|scope| {
-        let mut pool = Pool::new(&scope, options);
+        let mut pool = Pool::<Task>::new(&scope, options);
         b.iter(|| {
             let counter = counter.clone();
-            pool.execute(move || {
+            pool.push(move || {
                 black_box(counter.fetch_add(1, Ordering::Relaxed));
             });
         })
@@ -60,9 +60,9 @@ fn fib(n: u64) -> u64 {
 fn enqueue_fib_task(b: &mut Bencher) {
     let options = Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = Pool::new(&scope, options);
+        let mut pool = Pool::<Task>::new(&scope, options);
         b.iter(|| {
-            pool.execute(move || {
+            pool.push(move || {
                 black_box(fib(1000000));
             });
         });

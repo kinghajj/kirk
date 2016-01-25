@@ -2,8 +2,6 @@ extern crate crossbeam;
 extern crate env_logger;
 extern crate kirk;
 
-use kirk::{Options, Pool};
-
 #[test]
 fn it_works() {
     use std::iter;
@@ -13,11 +11,11 @@ fn it_works() {
     const ITEMS: usize = 100_000;
     let mut results = iter::repeat((0, 0)).take(ITEMS).collect::<Vec<_>>();
 
-    let options = Options::default();
+    let options = kirk::Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = Pool::new(&scope, options);
+        let mut pool = kirk::Pool::<kirk::Task>::new(&scope, options);
         for (i, result) in results.iter_mut().enumerate() {
-            pool.execute(move || {
+            pool.push(move || {
                 *result = (i, i + 1);
             });
         }
@@ -31,9 +29,9 @@ fn it_works() {
 #[test]
 #[cfg(feature = "nightly")]
 fn it_doesnt_bail() {
-    let options = Options::default();
+    let options = kirk::Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = Pool::new(&scope, options);
-        pool.execute(|| panic!(""));
+        let mut pool = kirk::Pool::<kirk::Task>::new(&scope, options);
+        pool.push(|| panic!(""));
     });
 }
