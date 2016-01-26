@@ -25,17 +25,15 @@ use crossbeam::sync::chase_lev::Steal::{Data, Abort, Empty};
 /// The generic "job" that a pool's workers can perform.
 #[cfg(feature = "nightly")]
 pub trait Job: Send + RecoverSafe {
-    type Product;
     #[inline]
-    fn perform(self) -> Self::Product;
+    fn perform(self);
 }
 
 /// The generic "job" that a pool's workers can perform.
 #[cfg(not(feature = "nightly"))]
 pub trait Job: Send {
-    type Product;
     #[inline]
-    fn perform(self) -> Self::Product;
+    fn perform(self);
 }
 
 enum Message<Job> {
@@ -355,8 +353,6 @@ impl<F: FnOnce()> FnBox for F {
 pub struct Task<'a>(Box<FnBox + Send + 'a>);
 
 impl<'a> Job for Task<'a> {
-    type Product = ();
-
     #[inline]
     fn perform(self) {
         let Task(task) = self;
