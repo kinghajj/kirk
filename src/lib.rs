@@ -9,7 +9,9 @@ extern crate log;
 extern crate num_cpus;
 
 use std::default::Default;
+use std::mem;
 use std::ops::Drop;
+use std::thread;
 use std::thread::{sleep, yield_now};
 use std::time::Duration;
 
@@ -192,7 +194,7 @@ impl Default for Options {
 ///
 /// let mut items = [0usize; 8];
 /// crossbeam::scope(|scope| {
-///     let mut pool = kirk::Pool::<kirk::Task>::new(&scope, kirk::Options::default());
+///     let mut pool = kirk::Pool::<kirk::Task>::scoped(&scope, kirk::Options::default());
 ///     for (i, e) in items.iter_mut().enumerate() {
 ///         pool.push(move || *e = i)
 ///     }
@@ -226,11 +228,16 @@ impl Default for Options {
 pub struct Pool<J> {
     options: Options,
     sender: chase_lev::Worker<Message<J>>,
+    handles: Option<Vec<(usize, thread::JoinHandle<()>)>>,
 }
 
 impl<'scope, J: Job + 'scope> Pool<J> {
-    /// Create a new worker pool.
-    pub fn new(scope: &Scope<'scope>, options: Options) -> Pool<J> {
+    /// Create a new scoped worker pool.
+    ///
+    /// Even after dropped, the workers continue processing outstanding jobs.
+    /// The enclosing thread will only block once the `crossbeam::scope` ends,
+    /// as it joins on all child threads.
+    pub fn scoped(scope: &Scope<'scope>, options: Options) -> Pool<J> {
         let (sender, stealer) = chase_lev::deque();
         for id in 0..options.num_workers {
             let stealer = stealer.clone();
@@ -242,6 +249,7 @@ impl<'scope, J: Job + 'scope> Pool<J> {
         Pool {
             options: options,
             sender: sender,
+            handles: None,
         }
     }
 
@@ -253,11 +261,45 @@ impl<'scope, J: Job + 'scope> Pool<J> {
     }
 }
 
+impl<J: Job + 'static> Pool<J> {
+    /// Create a new unscoped worker pool.
+    ///
+    /// When dropped, such a pool joins on all worker threads, which continue
+    /// processing outstanding jobs.
+    pub fn new(options: Options) -> Pool<J> {
+        let (sender, stealer) = chase_lev::deque();
+        let mut handles = Vec::with_capacity(options.num_workers);
+        for id in 0..options.num_workers {
+            let stealer = stealer.clone();
+            let mut worker = Worker::new(id, options);
+            let handle = thread::spawn(move || {
+                worker.run(stealer);
+            });
+            handles.push((id, handle));
+        }
+        Pool {
+            options: options,
+            sender: sender,
+            handles: Some(handles),
+        }
+    }
+}
+
 // When a pool is dropped, tell each worker to stop.
 impl<J> Drop for Pool<J> {
     fn drop(&mut self) {
         for _ in 0..self.options.num_workers {
             self.sender.push(Message::Stop);
+        }
+        // if an unscoped pool, await workers
+        let mut handles = None;
+        mem::swap(&mut self.handles, &mut handles);
+        if let Some(handles) = handles {
+            for (id, handle) in handles {
+                if let Err(e) = handle.join() {
+                    error!("while joining worker #{}: {:?}", id, e);
+                }
+            }
         }
     }
 }
