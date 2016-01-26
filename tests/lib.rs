@@ -1,6 +1,3 @@
-#![cfg_attr(feature = "nightly",
-            feature(recover))]
-
 #[macro_use]
 extern crate log;
 
@@ -42,33 +39,21 @@ fn it_doesnt_bail() {
 
 static STUFF: [u8; 128] = [0; 128];
 
-struct IncrementJob {
-    item: &'static u8,
-    tx: std::sync::mpsc::Sender<u8>,
-}
-
-impl kirk::Job for IncrementJob {
-    type Product = ();
-
-    fn perform(self) {
-        self.tx.send(*self.item + 1).unwrap();
-    }
-}
-
-#[cfg(feature = "nightly")]
-impl std::panic::RecoverSafe for IncrementJob { }
-
 #[test]
 fn static_works() {
     use std::thread;
 
     let collector = {
         let options = kirk::Options::default();
-        let mut pool = kirk::Pool::<IncrementJob>::new(options);
+        let mut pool = kirk::Pool::<kirk::Task>::new(options);
         let rx = {
             let (tx, rx) = std::sync::mpsc::channel();
             for x in STUFF.iter() {
-                pool.push(IncrementJob { item: x, tx: tx.clone() });
+                let tx = tx.clone();
+                pool.push(move || {
+                    tx.send(*x + 1).unwrap();
+                    drop(tx);
+                })
             }
             rx
         };

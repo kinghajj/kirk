@@ -322,6 +322,36 @@ impl<F: FnOnce()> FnBox for F {
 ///
 /// This allows pools to execute any kind of job, but with the increased cost of
 /// dynamic invocation.
+///
+/// # Warning
+///
+/// Because of the epoch-based memory management of `crossbeam`, it's possible
+/// for `Task` pools to deadlock if the closures own data that cause another
+/// thread to block. For example, this would hang if the line `drop(tx);` were
+/// removed from the tasks' closure.
+///
+/// ```
+/// extern crate crossbeam;
+/// extern crate kirk;
+///
+/// crossbeam::scope(|scope| {
+///     let rx = {
+///         let (tx, rx) = std::sync::mpsc::channel();
+///         let mut pool = kirk::Pool::<kirk::Task>::scoped(&scope, kirk::Options::default());
+///         for i in 0..10 {
+///             let tx = tx.clone();
+///             pool.push(move || {
+///                tx.send(i + 1).unwrap();
+///                drop(tx);
+///             });
+///         }
+///         rx
+///     };
+///     scope.spawn(move || {
+///         for _ in rx.iter() {}
+///     });
+/// })
+/// ```
 pub struct Task<'a>(Box<FnBox + Send + 'a>);
 
 impl<'a> Job for Task<'a> {
