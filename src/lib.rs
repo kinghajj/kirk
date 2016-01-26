@@ -20,14 +20,9 @@ use crossbeam::Scope;
 use crossbeam::sync::chase_lev;
 use crossbeam::sync::chase_lev::Steal::{Data, Abort, Empty};
 
-// Not exactly sure why `Sync` is required, when `scoped_threadpool` did not.
-// I think it's due to a possibly-overzealous requirement in `crossbeam`.
-// An unfortunate side-effect of this is that channel senders cannot be moved
-// into a task.
-
 /// The generic "job" that a pool's workers can perform.
 #[cfg(feature = "nightly")]
-pub trait Job: Send + Sync + RecoverSafe {
+pub trait Job: Send + RecoverSafe {
     type Product;
     #[inline]
     fn perform(self) -> Self::Product;
@@ -35,7 +30,7 @@ pub trait Job: Send + Sync + RecoverSafe {
 
 /// The generic "job" that a pool's workers can perform.
 #[cfg(not(feature = "nightly"))]
-pub trait Job: Send + Sync {
+pub trait Job: Send {
     type Product;
     #[inline]
     fn perform(self) -> Self::Product;
@@ -285,7 +280,7 @@ impl<F: FnOnce()> FnBox for F {
 ///
 /// This allows pools to execute any kind of job, but with the increased cost of
 /// dynamic invocation.
-pub struct Task<'a>(Box<FnBox + Send + Sync + 'a>);
+pub struct Task<'a>(Box<FnBox + Send + 'a>);
 
 impl<'a> Job for Task<'a> {
     type Product = ();
@@ -301,7 +296,7 @@ impl<'a> Job for Task<'a> {
 impl<'a> RecoverSafe for Task<'a> {}
 
 // Allow closures to be converted to tasks automatically for convenience.
-impl<'a, F> From<F> for Task<'a> where F: FnOnce() + Send + Sync + 'a
+impl<'a, F> From<F> for Task<'a> where F: FnOnce() + Send + 'a
 {
     #[inline]
     fn from(f: F) -> Task<'a> {

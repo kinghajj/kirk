@@ -5,9 +5,12 @@ authors = ["Samuel Fredrickson <kinghajj@gmail.com>"]
 description = "A scoped task pool using `crossbeam`."
 
 [dependencies]
-crossbeam = "~0.2.1"
 log = "~0.3.5"
 num_cpus = "~0.2.10"
+
+[dependencies.crossbeam]
+git = "https://github.com/kinghajj/crossbeam.git"
+branch = "relax-deque-sync-requirements"
 
 [dev-dependencies]
 env_logger = "~0.3.2"
