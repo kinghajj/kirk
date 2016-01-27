@@ -12,9 +12,9 @@ fn it_works() {
     const ITEMS: usize = 100_000;
     let mut results = iter::repeat((0, 0)).take(ITEMS).collect::<Vec<_>>();
 
-    let options = kirk::Options::default();
+    let options = kirk::crew::deque::Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = kirk::Pool::<kirk::Task>::scoped(&scope, options);
+        let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::scoped(&scope, options);
         for (i, result) in results.iter_mut().enumerate() {
             pool.push(move || {
                 *result = (i, i + 1);
@@ -30,9 +30,9 @@ fn it_works() {
 #[test]
 #[cfg(feature = "nightly")]
 fn it_doesnt_bail() {
-    let options = kirk::Options::default();
+    let options = kirk::crew::deque::Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = kirk::Pool::<kirk::Task>::scoped(&scope, options);
+        let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::scoped(&scope, options);
         pool.push(|| panic!(""));
     });
 }
@@ -44,8 +44,8 @@ fn static_works() {
     use std::thread;
 
     let collector = {
-        let options = kirk::Options::default();
-        let mut pool = kirk::Pool::<kirk::Task>::new(options);
+        let options = kirk::crew::deque::Options::default();
+        let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::new(options);
         let rx = {
             let (tx, rx) = std::sync::mpsc::channel();
             for x in STUFF.iter() {

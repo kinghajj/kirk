@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use test::{Bencher, black_box};
 
-use kirk::{Job, Options, Pool, Task};
+use kirk::{Job, Pool, Task, Deque};
+use kirk::crew::deque::Options;
 
 struct NopJob;
 
@@ -50,7 +51,7 @@ fn startup_and_teardown(mut b: &mut Bencher) {
     options.num_workers = 1;
     b.iter(|| {
         crossbeam::scope(|scope| {
-            let _ = Pool::<Task>::scoped(&scope, options);
+            let _ = Pool::<Deque<Task>>::scoped(&scope, options);
         });
     });
 }
@@ -60,7 +61,7 @@ fn enqueue_nop_job(b: &mut Bencher) {
     let mut options = Options::default();
     options.num_workers = 1;
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<NopJob>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<NopJob>>::scoped(&scope, options);
         b.iter(|| pool.push(NopJob));
     });
 }
@@ -70,7 +71,7 @@ fn enqueue_nop_task(b: &mut Bencher) {
     let mut options = Options::default();
     options.num_workers = 1;
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<Task>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<Task>>::scoped(&scope, options);
         b.iter(|| {
             pool.push(move || {
                 black_box(0);
@@ -85,7 +86,7 @@ fn enqueue_atomic_task(b: &mut Bencher) {
     options.num_workers = 1;
     let counter = Arc::new(AtomicUsize::new(0));
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<Task>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<Task>>::scoped(&scope, options);
         b.iter(|| {
             let counter = counter.clone();
             pool.push(move || {
@@ -101,7 +102,7 @@ fn enqueue_atomic_job(b: &mut Bencher) {
     options.num_workers = 1;
     let counter = Arc::new(AtomicUsize::new(0));
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<AtomicJob>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<AtomicJob>>::scoped(&scope, options);
         b.iter(|| {
             pool.push(AtomicJob(counter.clone()));
         })
@@ -112,7 +113,7 @@ fn enqueue_atomic_job(b: &mut Bencher) {
 fn enqueue_fib_task(b: &mut Bencher) {
     let options = Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<Task>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<Task>>::scoped(&scope, options);
         b.iter(|| {
             pool.push(move || {
                 black_box(fib(1000000));
@@ -125,7 +126,7 @@ fn enqueue_fib_task(b: &mut Bencher) {
 fn enqueue_fib_job(b: &mut Bencher) {
     let options = Options::default();
     crossbeam::scope(|scope| {
-        let mut pool = Pool::<FibJob>::scoped(&scope, options);
+        let mut pool = Pool::<Deque<FibJob>>::scoped(&scope, options);
         b.iter(|| {
             pool.push(black_box(FibJob(1000000)));
         });
