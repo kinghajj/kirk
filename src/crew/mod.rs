@@ -1,5 +1,6 @@
 use Job;
 
+pub mod channel;
 pub mod deque;
 
 pub trait Crew {

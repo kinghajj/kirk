@@ -19,6 +19,7 @@ use crossbeam::Scope;
 
 pub use crew::{Crew, Parameters, Worker};
 
+pub use crew::channel::Channel;
 pub use crew::deque::Deque;
 
 pub mod crew;
