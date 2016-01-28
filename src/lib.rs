@@ -8,7 +8,6 @@ extern crate crossbeam;
 extern crate log;
 extern crate num_cpus;
 
-use std::mem;
 use std::ops::Drop;
 use std::thread;
 
@@ -92,7 +91,6 @@ pub struct Pool<C>
     where C: Crew
 {
     crew: C,
-    handles: Option<Vec<(usize, thread::JoinHandle<()>)>>,
 }
 
 impl<'scope, C, J> Pool<C>
@@ -114,7 +112,6 @@ impl<'scope, C, J> Pool<C>
         }
         Pool {
             crew: crew,
-            handles: None,
         }
     }
 
@@ -132,17 +129,14 @@ impl<C, J> Pool<C>
 {
     pub fn new(settings: C::Settings) -> Pool<C> {
         let mut crew = C::new(settings);
-        let mut handles = Vec::with_capacity(settings.num_workers());
-        for id in 0..settings.num_workers() {
+        for _ in 0..settings.num_workers() {
             let mut worker = crew.hire();
-            handles.push((id,
-                          thread::spawn(move || {
+            thread::spawn(move || {
                 worker.run();
-            })));
+            });
         }
         Pool {
             crew: crew,
-            handles: Some(handles),
         }
     }
 }
@@ -152,16 +146,6 @@ impl<C> Drop for Pool<C> where C: Crew
 {
     fn drop(&mut self) {
         self.crew.stop();
-        // if an unscoped pool, await workers
-        let mut handles = None;
-        mem::swap(&mut self.handles, &mut handles);
-        if let Some(handles) = handles {
-            for (id, handle) in handles {
-                if let Err(e) = handle.join() {
-                    error!("while joining worker #{}: {:?}", id, e);
-                }
-            }
-        }
     }
 }
 
