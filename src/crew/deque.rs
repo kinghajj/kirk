@@ -1,3 +1,27 @@
+//! A crew that uses the lock-free Chase-Lev deque implemented in `crossbeam`.
+//!
+//! Each worker runs this loop in a separate thread:
+//!
+//!   1. Try to steal a job
+//!   2. If successful, perform it, and become "hot"
+//!   3. If shutting down, break
+//!   4. If lost a race or no jobs, "cool down"
+//!   5. Possibly yield or sleep
+//!
+//! When a hot worker "cools down," it becomes "warm", with a retry count of
+//! zero; an already-warm worker increases the retry count. Eventually, the
+//! retry threshold may be exceeded, and the worker becomes "cold".
+//!
+//! The temperature determines the action at step five: a hot worker immediately
+//! continues the loop; a warm one cooperatively yields to another thread; and
+//! cold ones sleep. The goal is to allow workers to progress unhindered as long
+//! as there are jobs, but reduce excessive CPU usage during periods when there
+//! are little to none.
+//!
+//! A cold worker may also become hot again if it loses a race to steal a job,
+//! since this strongly indicates that another job is ready, but remains cold
+//! as long as it finds the queue empty.
+
 use std::default::Default;
 use std::thread::{sleep, yield_now};
 use std::time::Duration;
@@ -19,6 +43,7 @@ enum Load {
     Cold,
 }
 
+/// The `Crew` `Member` for `Deque`.
 pub struct DequeWorker<J> {
     #[cfg_attr(not(feature = "nightly"), allow(dead_code))]
     id: usize,
@@ -119,7 +144,7 @@ impl<J: Job> Worker for DequeWorker<J> {
     }
 }
 
-/// Parameters to adjust the size and behavior of a pool.
+/// Parameters to adjust the size and behavior of the crew.
 ///
 /// The current defaults for retry threshold and cold interval--32 and 1ms--were
 /// chosen arbitrarily. Experimentation may be prudent.
@@ -150,6 +175,7 @@ impl Default for Options {
     }
 }
 
+/// A `Crew` that uses a lock-free Chase-Lev deque.
 pub struct Deque<J> {
     next_id: usize,
     options: Options,

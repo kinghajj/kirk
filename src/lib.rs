@@ -1,4 +1,86 @@
-//! Pools of workers that perform generic jobs, statically or dynamically.
+//! Pools of generic crews that perform generic jobs, statically or dynamically.
+//!
+//! # Pools
+//!
+//! With fewest restrictions, a pool could run any task.
+//!
+//! ```
+//! use kirk::{Pool, Task, Deque};
+//! use kirk::crew::deque::Options;
+//!
+//! let options = Options::default();
+//! let mut pool = Pool::<Deque<Task>>::new(options);
+//! pool.push(|| { println!("Hello!") });
+//! pool.push(|| { println!("World!") });
+//! ```
+//!
+//! # Crews
+//!
+//! Crews abstract the method of sending jobs to workers. Another implementation
+//! is `Channel`.
+//!
+//! ```
+//! use kirk::{Pool, Task, Channel};
+//! use kirk::crew::channel::Options;
+//!
+//! let options = Options::default();
+//! let mut pool = Pool::<Channel<Task>>::new(options);
+//! pool.push(|| { println!("Hello!") });
+//! pool.push(|| { println!("World!") });
+//! ```
+//!
+//! The goal is to support various methods for different workloads, while making
+//! it easy to switch from one to another.
+//!
+//! # Jobs and Tasks
+//!
+//! The core abstraction is `Job`, which has a single, consuming method,
+//! `perform`. Defining a data structure that implements `Job` allows worker
+//! threads to statically dispatch the call to `perform`.
+//!
+//! ```
+//! use kirk::{Pool, Job, Deque};
+//! use kirk::crew::deque::Options;
+//!
+//! enum Msg { Hello, World };
+//!
+//! impl Job for Msg {
+//!     fn perform(self) {
+//!         match self {
+//!             Msg::Hello => println!("Hello!"),
+//!             Msg::World => println!("World!"),
+//!         }
+//!     }
+//! }
+//!
+//! let options = Options::default();
+//! let mut pool = Pool::<Deque<Msg>>::new(options);
+//! pool.push(Msg::Hello);
+//! pool.push(Msg::World);
+//! ```
+//!
+//! As shown before, however, there's a predefined type `Task`, a boxed closure.
+//! This allows arbitary jobs to be pushed to a pool, but with added costs both
+//! to construct the box and to call each dynamically.
+//!
+//! # Scoping
+//!
+//! Using `crossbeam::scope`, jobs can safely access data on the stack of the
+//! original caller, like so:
+//!
+//! ```
+//! extern crate crossbeam;
+//! extern crate kirk;
+//!
+//! let mut items = [0usize; 8];
+//! crossbeam::scope(|scope| {
+//!     let options = kirk::crew::deque::Options::default();
+//!     let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::scoped(&scope, options);
+//!     for (i, e) in items.iter_mut().enumerate() {
+//!         pool.push(move || *e = i)
+//!     }
+//! });
+//! ```
 
 #![cfg_attr(feature = "nightly",
             feature(recover))]
@@ -17,7 +99,6 @@ use std::panic::RecoverSafe;
 use crossbeam::Scope;
 
 pub use crew::{Crew, Parameters, Worker};
-
 pub use crew::channel::Channel;
 pub use crew::deque::Deque;
 
@@ -26,6 +107,7 @@ pub mod crew;
 /// The generic "job" that a pool's workers can perform.
 #[cfg(feature = "nightly")]
 pub trait Job: Send + RecoverSafe {
+    /// Consume and execute the job.
     #[inline]
     fn perform(self);
 }
@@ -33,6 +115,7 @@ pub trait Job: Send + RecoverSafe {
 /// The generic "job" that a pool's workers can perform.
 #[cfg(not(feature = "nightly"))]
 pub trait Job: Send {
+    /// Consume and execute the job.
     #[inline]
     fn perform(self);
 }
@@ -42,51 +125,11 @@ enum Message<Job> {
     Stop,
 }
 
-/// A scoped set of worker threads that perform jobs.
+/// A crew of workers that perform jobs.
 ///
-/// # Scoping
-///
-/// Because of `crossbeam::scope`, jobs can safely access data on the stack of
-/// the original caller, like so:
-///
-/// ```
-/// extern crate crossbeam;
-/// extern crate kirk;
-///
-/// let mut items = [0usize; 8];
-/// crossbeam::scope(|scope| {
-///     let options = kirk::crew::deque::Options::default();
-///     let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::scoped(&scope, options);
-///     for (i, e) in items.iter_mut().enumerate() {
-///         pool.push(move || *e = i)
-///     }
-/// });
-/// ```
-///
-/// # Worker Details
-///
-/// Jobs are pushed to workers using the lock-free Chase-Lev deque implemented
-/// in `crossbeam`. Each worker runs this loop in a separate thread:
-///
-///   1. Try to steal a job
-///   2. If successful, perform it, and become "hot"
-///   3. If shutting down, break
-///   4. If lost a race or no jobs, "cool down"
-///   5. Possibly yield or sleep
-///
-/// When a hot worker "cools down," it becomes "warm", with a retry count of
-/// zero; an already-warm worker increases the retry count. Eventually, the
-/// retry threshold may be exceeded, and the worker becomes "cold".
-///
-/// The temperature determines the action at step five: a hot worker immediately
-/// continues the loop; a warm one cooperatively yields to another thread; and
-/// cold ones sleep. The goal is to allow workers to progress unhindered as long
-/// as there are jobs, but reduce excessive CPU usage during periods when there
-/// are little to none.
-///
-/// A cold worker may also become hot again if it loses a race to steal a job,
-/// since this strongly indicates that another job is ready, but remains cold
-/// as long as it finds the queue empty.
+/// Even after dropped, the workers continue processing outstanding jobs.
+/// If scoped, the enclosing thread will only block once the `crossbeam::scope`
+/// ends, since it must join on all threads it has spawned for safety.
 pub struct Pool<C>
     where C: Crew
 {
@@ -97,11 +140,7 @@ impl<'scope, C, J> Pool<C>
     where J: Job + 'scope,
           C: Crew<Job = J> + 'scope
 {
-    /// Create a new scoped worker pool.
-    ///
-    /// Even after dropped, the workers continue processing outstanding jobs.
-    /// The enclosing thread will only block once the `crossbeam::scope` ends,
-    /// as it joins on all child threads.
+    /// Create a new, scoped pool.
     pub fn scoped(scope: &Scope<'scope>, settings: C::Settings) -> Pool<C> {
         let mut crew = C::new(settings);
         for _ in 0..settings.num_workers() {
@@ -110,12 +149,10 @@ impl<'scope, C, J> Pool<C>
                 worker.run();
             });
         }
-        Pool {
-            crew: crew,
-        }
+        Pool { crew: crew }
     }
 
-    /// Add a job to the pool.
+    /// Give a job to the pool's crew.
     pub fn push<F>(&mut self, f: F)
         where J: From<F>
     {
@@ -127,6 +164,10 @@ impl<C, J> Pool<C>
     where J: Job + 'static,
           C: Crew<Job = J> + 'static
 {
+    /// Create an new, unscoped pool.
+    ///
+    /// When dropped, each worker thread is joined, to ensure that all
+    /// outstanding jobs
     pub fn new(settings: C::Settings) -> Pool<C> {
         let mut crew = C::new(settings);
         for _ in 0..settings.num_workers() {
@@ -135,9 +176,7 @@ impl<C, J> Pool<C>
                 worker.run();
             });
         }
-        Pool {
-            crew: crew,
-        }
+        Pool { crew: crew }
     }
 }
 
@@ -176,27 +215,27 @@ impl<F: FnOnce()> FnBox for F {
 /// removed from the tasks' closure.
 ///
 /// ```
-/// extern crate crossbeam;
-/// extern crate kirk;
+/// use std::sync::mpsc::channel;
+/// use std::thread;
+/// use kirk::{Pool, Task, Deque};
+/// use kirk::crew::deque::Options;
 ///
-/// crossbeam::scope(|scope| {
-///     let rx = {
-///         let (tx, rx) = std::sync::mpsc::channel();
-///         let options = kirk::crew::deque::Options::default();
-///         let mut pool = kirk::Pool::<kirk::Deque<kirk::Task>>::scoped(&scope, options);
-///         for i in 0..10 {
-///             let tx = tx.clone();
-///             pool.push(move || {
-///                tx.send(i + 1).unwrap();
-///                drop(tx);
-///             });
-///         }
-///         rx
-///     };
-///     scope.spawn(move || {
-///         for _ in rx.iter() {}
-///     });
-/// })
+/// let rx = {
+///     let (tx, rx) = channel();
+///     let options = Options::default();
+///     let mut pool = Pool::<Deque<Task>>::new(options);
+///     for i in 0..10 {
+///         let tx = tx.clone();
+///         pool.push(move || {
+///            tx.send(i + 1).unwrap();
+///            drop(tx);
+///         });
+///     }
+///     rx
+/// };
+/// thread::spawn(move || {
+///     for _ in rx.iter() {}
+/// });
 /// ```
 pub struct Task<'a>(Box<FnBox + Send + 'a>);
 

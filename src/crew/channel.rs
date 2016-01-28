@@ -1,3 +1,5 @@
+//! A crew that uses `std::sync::mpsc`.
+
 use std::default::Default;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -10,6 +12,7 @@ use num_cpus;
 use {Job, Message};
 use super::{Crew, Parameters, Worker};
 
+/// The `Crew` `Member` for `Channel`.
 pub struct ChannelWorker<J> {
     #[cfg_attr(not(feature = "nightly"), allow(dead_code))]
     id: usize,
@@ -55,6 +58,7 @@ impl<J: Job> Worker for ChannelWorker<J> {
 }
 
 
+/// Parameters to adjust the size of the crew.
 #[derive(Copy, Clone)]
 pub struct Options {
     /// The number of workers to create in the pool.
@@ -73,6 +77,7 @@ impl Default for Options {
     }
 }
 
+/// A `Crew` that uses a shared, mutex-wrapped receiver.
 pub struct Channel<J> {
     next_id: usize,
     options: Options,
