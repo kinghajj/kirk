@@ -110,7 +110,7 @@ pub use crew::deque::Deque;
 
 pub mod crew;
 
-/// The generic "job" that a pool's workers can perform.
+/// An item of work to be executed in a thread pool.
 #[cfg(feature = "nightly")]
 pub trait Job: Send + RecoverSafe {
     /// Consume and execute the job.
@@ -118,7 +118,7 @@ pub trait Job: Send + RecoverSafe {
     fn perform(self);
 }
 
-/// The generic "job" that a pool's workers can perform.
+/// An item of work to be executed in a thread pool.
 #[cfg(not(feature = "nightly"))]
 pub trait Job: Send {
     /// Consume and execute the job.
@@ -131,9 +131,12 @@ enum Message<Job> {
     Stop,
 }
 
-/// A crew of workers that perform jobs.
+/// A crew of workers that perform jobs on separate threads.
 ///
-/// Even after dropped, the workers continue processing outstanding jobs.
+/// Even after dropped, the workers continue processing outstanding jobs, then
+/// halt when there are no more. Any shared resources of the crew would get
+/// dropped then.
+///
 /// If scoped, the enclosing thread will only block once the `crossbeam::scope`
 /// ends, since it must join on all threads it has spawned for safety.
 pub struct Pool<C>
