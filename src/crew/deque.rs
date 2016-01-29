@@ -57,6 +57,8 @@ impl<J: Job> DequeWorker<J> {
     // the worker just successfully acquired an item
     // this version uses `recover` to handle panics from jobs
     #[cfg(feature = "nightly")]
+    #[cfg_attr(feature = "clippy",
+               allow(boxed_local))]
     #[inline]
     fn does(&mut self, job: J) {
         recover(|| {

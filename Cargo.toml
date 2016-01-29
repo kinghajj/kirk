@@ -7,6 +7,7 @@ description = "A scoped task pool using `crossbeam`."
 [dependencies]
 log = "~0.3.5"
 num_cpus = "~0.2.10"
+clippy = {version = "*", optional = true}
 
 [dependencies.crossbeam]
 git = "https://github.com/kinghajj/crossbeam.git"
@@ -16,4 +17,7 @@ branch = "relax-deque-sync-requirements"
 env_logger = "~0.3.2"
 
 [features]
+default = []
 nightly = []
+plugins = []
+lints = ["clippy", "plugins"]

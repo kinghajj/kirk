@@ -85,6 +85,12 @@
 #![cfg_attr(feature = "nightly",
             feature(recover))]
 
+#![cfg_attr(feature = "plugins",
+            feature(plugin))]
+
+#![cfg_attr(feature = "clippy",
+            plugin(clippy))]
+
 extern crate crossbeam;
 #[macro_use]
 extern crate log;
@@ -196,6 +202,8 @@ trait FnBox {
 }
 
 impl<F: FnOnce()> FnBox for F {
+    #[cfg_attr(feature = "clippy",
+               allow(boxed_local))]
     #[inline]
     fn call_box(self: Box<F>) {
         (*self)()
