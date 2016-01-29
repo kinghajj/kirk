@@ -28,10 +28,17 @@ script:
       travis-cargo test &&
       travis-cargo test -- --release &&
       travis-cargo --only stable doc
+
+after_success:
+  - travis-cargo --only stable doc-upload
+  - travis-cargo coveralls --no-sudo --verify
+
 env:
   global:
     # override the default `--features unstable` used for the nightly branch (optional)
     - TRAVIS_CARGO_NIGHTLY_FEATURE=nightly
+    # encrypted token for doc uploads
+    - secure: "Yq0tGr5aW9/D3tfLUlC7W0uZv3F6rRppi1Hc0ciowzjXw0U1x95QNXlVfSwrDcb4iymY9EI3fd+XiqCNESq5ZCDp/oVr7fygMBw4lovk90obrIVgMZaIMT0sjz5XBRMZpQX7bEen4XTlEQzciSGGMwtxh18Gs6/QcUfjg8nES6XAeoDaUeKXPqPSHxEY7oHqgKHQmjcMVnY27DScJ4bHKj7iUw6ngnkPIM96vbGVuBptROFCNKiUZkiYWfBkuaNzWbcKO8OFTGS9pDAuKc6kjBbuPFbSZ1aAtqv5H+SUdnGe5Z70bU5GxF2dOMMYvEOsNON6lV5XUHeAuTd0mrlP0CEvFRfa8eiW2su+ItFGrM5ARfyE2/n06Emu5ffHNwq7a1vitHHKEGxCmHVVYAhlU1uZqXozQdXTG+CP/4wWxd/ePlgwRn/Lkmf490z0BVdsFGwVlgbwMKRzyxfSK/1AXLgOoNbWj9yJ7+FLmYoLXNDRUrICZpgqsJuEEYhz6JIflKGfSeiLx/BwZGibdqaIK5IGJhBA7qA0lARvGhmRWPxU/6z8UvXAS+Wxi7W0VyFY+TUxxd0PLogeqs6+D9Nsx9DDxGDTYUxy+7vSwtEv0P7bzB7HTRhEHFx5zGIdyJXVLmCDOjJOrTb4inZVOQho636NAKrpJapVL5RIoYov9o4="
 notifications:
   email:
     on_success: never
