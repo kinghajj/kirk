@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/kinghajj/kirk.svg?branch=master)](https://travis-ci.org/kinghajj/kirk)
 
+[![Coverage Status](https://coveralls.io/repos/github/kinghajj/kirk/badge.svg?branch=master)](https://coveralls.io/github/kinghajj/kirk?branch=master)
+
 ## Documentation
 
 If I understand correctly, the [documentation][docs] should be here.
