@@ -10,8 +10,8 @@ num_cpus = "~0.2.10"
 clippy = {version = "*", optional = true}
 
 [dependencies.crossbeam]
-git = "https://github.com/kinghajj/crossbeam.git"
-branch = "relax-deque-sync-requirements"
+git = "https://github.com/aturon/crossbeam.git"
+branch = "master"
 
 [dev-dependencies]
 env_logger = "~0.3.2"
