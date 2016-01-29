@@ -1,8 +1,6 @@
 # `kirk`, a highly-flexible thread pool
 
-[![Build Status](https://travis-ci.org/kinghajj/kirk.svg?branch=master)](https://travis-ci.org/kinghajj/kirk)
-
-[![Coverage Status](https://coveralls.io/repos/github/kinghajj/kirk/badge.svg?branch=master)](https://coveralls.io/github/kinghajj/kirk?branch=master)
+[![Build Status](https://travis-ci.org/kinghajj/kirk.svg?branch=master)](https://travis-ci.org/kinghajj/kirk) [![Coverage Status](https://coveralls.io/repos/github/kinghajj/kirk/badge.svg?branch=master)](https://coveralls.io/github/kinghajj/kirk?branch=master)
 
 ## Documentation
 
@@ -60,7 +58,7 @@ impl Job for Work {
 crossbeam::scope(|scope| {
     let mut pool = Pool::<Deque<Work>>::scoped(&scope, deque::Options::default());
     for (i, e) in items.iter_mut().enumerate() {
-        pool.push(Work { i: i, e: e };
+        pool.push(Work { i: i, e: e });
     }
 }
 ```
