@@ -8,7 +8,7 @@
 
 If I understand correctly, the [documentation][docs] should be here.
 
-[docs]: http://kinghajj.github.io/kirk-doc/kirk/
+[docs]: http://kinghajj.github.io/kirk/kirk/
 
 ## Examples
 
