@@ -4,7 +4,7 @@
 
 ## Documentation
 
-If I understand correctly, the [documentation][docs] should be here.
+The [documentation][docs] is hosted on GitHub Pages.
 
 [docs]: http://kinghajj.github.io/kirk/kirk/
 
