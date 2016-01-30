@@ -8,6 +8,13 @@ The [documentation][docs] is hosted on GitHub Pages.
 
 [docs]: http://kinghajj.github.io/kirk/kirk/
 
+## Stability
+
+The API and internal designs are subject to rapid change, so breakages could
+happen frequently until a pleasant and high-performance interface is found.
+Play around with this and figure out ways to improve it, but don't rely on it
+yet for anything truly important.
+
 ## Examples
 
 Pools are generic not only to the jobs performed, but also to the method for
@@ -169,4 +176,10 @@ The icing on the cake: this crate never uses `unsafe`:
     $ grep -r --include=*.rs unsafe .
     $
 
+[As dbaupp pointed out][dbaupp], however, the current design has a major
+drawback compared to other scoped threadpools because of this, since it cannot
+reuse the same pool for different scopes throughout the lifetime of an
+application.
+
 [jan2016_meetup]: https://air.mozilla.org/bay-area-rust-meetup-january-2016/?a
+[dbaupp]: https://www.reddit.com/r/rust/comments/43ajja/kirk_a_highlyflexible_thread_pool/czh0nmi
