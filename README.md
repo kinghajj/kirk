@@ -1,4 +1,4 @@
-# `kirk`, a highly-flexible thread pool
+# `kirk`, a highly-flexible thread pool for Rust
 
 [![Build Status](https://travis-ci.org/kinghajj/kirk.svg?branch=master)](https://travis-ci.org/kinghajj/kirk) [![Coverage Status](https://coveralls.io/repos/github/kinghajj/kirk/badge.svg?branch=master)](https://coveralls.io/github/kinghajj/kirk?branch=master)
 
