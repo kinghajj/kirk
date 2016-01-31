@@ -38,7 +38,7 @@ impl Job for Msg {
     fn perform(self) {
         match Msg {
             Msg::Hello => println!("Hello!"),
-            Msg::World => println!("Hello!"),
+            Msg::World => println!("World!"),
         }
     }
 }
