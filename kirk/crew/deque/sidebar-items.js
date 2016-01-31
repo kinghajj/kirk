@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Deque","A `Crew` that uses a lock-free Chase-Lev deque."],["DequeWorker","The `Crew` `Member` for `Deque`."],["Options","Parameters to adjust the size and behavior of the crew."]]});

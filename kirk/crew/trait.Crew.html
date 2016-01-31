@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Crew` trait in crate `kirk`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Crew">
+
+    <title>kirk::crew::Crew - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>kirk</a>::<wbr><a href='index.html'>crew</a></p><script>window.sidebarCurrent = {name: 'Crew', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../index.html'>kirk</a>::<wbr><a href='index.html'>crew</a>::<wbr><a class='trait' href=''>Crew</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-163' class='srclink' href='../../src/kirk/crew/mod.rs.html#9-25' title='goto source code'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait Crew {
+    type Job: <a class='trait' href='../../kirk/trait.Job.html' title='kirk::Job'>Job</a>;
+    type Member: <a class='trait' href='../../kirk/crew/trait.Worker.html' title='kirk::crew::Worker'>Worker</a>;
+    type Settings: <a class='trait' href='../../kirk/crew/trait.Parameters.html' title='kirk::crew::Parameters'>Parameters</a>;
+    fn <a href='#tymethod.new' class='fnname'>new</a>(settings: Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Settings</a>) -&gt; Self;
+    fn <a href='#tymethod.hire' class='fnname'>hire</a>(&amp;mut self) -&gt; Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Member</a>;
+    fn <a href='#tymethod.give' class='fnname'>give</a>&lt;F&gt;(&amp;mut self, job: F) <span class='where'>where Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Job</a>: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.From.html' title='core::convert::From'>From</a>&lt;F&gt;</span>;
+    fn <a href='#tymethod.stop' class='fnname'>stop</a>(&amp;mut self);
+}</pre><div class='docblock'><p>A collection of workers that can be given jobs.</p>
+</div>
+            <h2 id='associated-types'>Associated Types</h2>
+            <div class='methods'>
+        <h3 id='associatedtype.Job' class='method stab '><code>type Job: <a class='trait' href='../../kirk/trait.Job.html' title='kirk::Job'>Job</a></code></h3><h3 id='associatedtype.Member' class='method stab '><code>type Member: <a class='trait' href='../../kirk/crew/trait.Worker.html' title='kirk::crew::Worker'>Worker</a></code></h3><h3 id='associatedtype.Settings' class='method stab '><code>type Settings: <a class='trait' href='../../kirk/crew/trait.Parameters.html' title='kirk::crew::Parameters'>Parameters</a></code></h3></div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.new' class='method stab '><code>fn <a href='#tymethod.new' class='fnname'>new</a>(settings: Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Settings</a>) -&gt; Self</code></h3><div class='docblock'><p>Construct a crew from its parameters.</p>
+</div><h3 id='tymethod.hire' class='method stab '><code>fn <a href='#tymethod.hire' class='fnname'>hire</a>(&amp;mut self) -&gt; Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Member</a></code></h3><div class='docblock'><p>Construct a new worker.</p>
+</div><h3 id='tymethod.give' class='method stab '><code>fn <a href='#tymethod.give' class='fnname'>give</a>&lt;F&gt;(&amp;mut self, job: F) <span class='where'>where Self::<a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Job</a>: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.From.html' title='core::convert::From'>From</a>&lt;F&gt;</span></code></h3><div class='docblock'><p>Send a job to the workers.</p>
+</div><h3 id='tymethod.stop' class='method stab '><code>fn <a href='#tymethod.stop' class='fnname'>stop</a>(&amp;mut self)</code></h3><div class='docblock'><p>Tell the workers to stop after completing all outstanding jobs.</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><code>impl&lt;J: <a class='trait' href='../../kirk/trait.Job.html' title='kirk::Job'>Job</a>&gt; <a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Crew</a> for <a class='struct' href='../../kirk/crew/channel/struct.Channel.html' title='kirk::crew::channel::Channel'>Channel</a>&lt;J&gt;</code></li>
+<li><code>impl&lt;J: <a class='trait' href='../../kirk/trait.Job.html' title='kirk::Job'>Job</a>&gt; <a class='trait' href='../../kirk/crew/trait.Crew.html' title='kirk::crew::Crew'>Crew</a> for <a class='struct' href='../../kirk/crew/deque/struct.Deque.html' title='kirk::crew::deque::Deque'>Deque</a>&lt;J&gt;</code></li>
+</ul><script type="text/javascript" async
+                              src="../../implementors/kirk/crew/trait.Crew.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "kirk";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

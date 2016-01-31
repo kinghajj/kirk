@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["crew","Traits that abstract how to send jobs to workers."]],"struct":[["Pool","A crew of workers that perform jobs on separate threads."],["Task","A boxed closure that can be performed as a job."]],"trait":[["Job","An item of work to be executed in a thread pool."]]});
