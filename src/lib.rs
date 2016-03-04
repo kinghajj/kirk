@@ -169,6 +169,8 @@ impl<'scope, C, J> Pool<C>
     }
 }
 
+// Hello!
+
 impl<C, J> Pool<C>
     where J: Job + 'static,
           C: Crew<Job = J> + 'static
